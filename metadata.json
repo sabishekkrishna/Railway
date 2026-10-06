@@ -1,0 +1,6 @@
+{
+  "name": "Indian Railways Operations Control & Station Management System",
+  "description": "Comprehensive simulation and operational management system for Indian Railways stations, featuring real-time train movement, platform allocation, track interlocking, collision prevention, maintenance workflows, emergency response, and passenger information systems.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
