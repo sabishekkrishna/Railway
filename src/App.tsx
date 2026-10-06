@@ -1,6 +1,7 @@
 /**
- * Indian Railways Operations Control & Station Management System (IR-OCC)
- * Academic & Engineering Simulation System
+ * Indian Railways Station Management System (IR-SMS)
+ * Station Master & Operational Control Terminal
+ * Designed specifically for station operations management at New Delhi (NDLS)
  */
 
 import React, { useState } from 'react';
@@ -10,29 +11,12 @@ import { Sidebar } from './components/layout/Sidebar';
 import { AuditBanner } from './components/common/AuditBanner';
 import { NotificationDrawer } from './components/common/NotificationDrawer';
 
-// Module Components
-import { ControlRoomDashboard } from './modules/dashboard/ControlRoomDashboard';
-import { StationMasterDashboard } from './modules/dashboard/StationMasterDashboard';
-import { AdminDashboard } from './modules/dashboard/AdminDashboard';
-import { PassengerDashboard } from './modules/dashboard/PassengerDashboard';
-import { StationMapVisualizer } from './modules/stationMap/StationMapVisualizer';
-import { TrainManagement } from './modules/trains/TrainManagement';
-import { TrainScheduling } from './modules/schedules/TrainScheduling';
+// 5 Essential Station Management Modules
+import { StationInterlockingView } from './modules/station/StationInterlockingView';
 import { PlatformAllocation } from './modules/platforms/PlatformAllocation';
-import { TrackManagement } from './modules/tracks/TrackManagement';
-import { SignalSimulation } from './modules/signals/SignalSimulation';
-import { TrainMovement } from './modules/movement/TrainMovement';
-import { CollisionPrevention } from './modules/collision/CollisionPrevention';
-import { TrainMaintenance } from './modules/maintenance/TrainMaintenance';
-import { TrainHealthSensors } from './modules/sensors/TrainHealthSensors';
-import { EmergencyManagement } from './modules/emergency/EmergencyManagement';
-import { ScenarioSimulator } from './modules/simulation/ScenarioSimulator';
-import { DelayManagement } from './modules/delays/DelayManagement';
-import { StaffManagement } from './modules/staff/StaffManagement';
-import { StationResources } from './modules/resources/StationResources';
-import { ReportsAnalytics } from './modules/reports/ReportsAnalytics';
-import { AuditLogViewer } from './modules/audit/AuditLogViewer';
-import { AIDecisionSupport } from './modules/aiDecision/AIDecisionSupport';
+import { StationTimetableView } from './modules/station/StationTimetableView';
+import { PassengerDashboard } from './modules/dashboard/PassengerDashboard';
+import { StationEmergencyView } from './modules/station/StationEmergencyView';
 
 const MainContent: React.FC = () => {
   const { activeTab } = useRailway();
@@ -40,52 +24,18 @@ const MainContent: React.FC = () => {
 
   const renderActiveModule = () => {
     switch (activeTab) {
-      case 'control-room':
-        return <ControlRoomDashboard />;
-      case 'station-master':
-        return <StationMasterDashboard />;
-      case 'admin-dashboard':
-        return <AdminDashboard />;
-      case 'passenger-pids':
-        return <PassengerDashboard />;
-      case 'station-map':
-        return <StationMapVisualizer />;
-      case 'trains':
-        return <TrainManagement />;
-      case 'schedules':
-        return <TrainScheduling />;
+      case 'station-interlocking':
+        return <StationInterlockingView />;
       case 'platforms':
         return <PlatformAllocation />;
-      case 'tracks':
-        return <TrackManagement />;
-      case 'signals':
-        return <SignalSimulation />;
-      case 'movement':
-        return <TrainMovement />;
-      case 'collision':
-        return <CollisionPrevention />;
-      case 'maintenance':
-        return <TrainMaintenance />;
-      case 'sensors':
-        return <TrainHealthSensors />;
+      case 'timetable':
+        return <StationTimetableView />;
+      case 'passenger-pids':
+        return <PassengerDashboard />;
       case 'emergency':
-        return <EmergencyManagement />;
-      case 'scenarios':
-        return <ScenarioSimulator />;
-      case 'delays':
-        return <DelayManagement />;
-      case 'staff':
-        return <StaffManagement />;
-      case 'resources':
-        return <StationResources />;
-      case 'reports':
-        return <ReportsAnalytics />;
-      case 'audit':
-        return <AuditLogViewer />;
-      case 'ai-decision':
-        return <AIDecisionSupport />;
+        return <StationEmergencyView />;
       default:
-        return <ControlRoomDashboard />;
+        return <StationInterlockingView />;
     }
   };
 

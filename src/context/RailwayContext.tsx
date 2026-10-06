@@ -139,7 +139,7 @@ export const RailwayProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [simulatedMinutes, setSimulatedMinutes] = useState<number>(14 * 60 + 30); // 14:30
   const [simRunning, setSimRunning] = useState<boolean>(true);
   const [simSpeed, setSimSpeed] = useState<number>(1);
-  const [activeTab, setActiveTab] = useState<string>('control-room');
+  const [activeTab, setActiveTab] = useState<string>('station-interlocking');
 
   const [selectedTrain, setSelectedTrain] = useState<Train | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
