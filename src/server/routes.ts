@@ -272,16 +272,40 @@ apiRouter.post('/conflicts/:id/execute-action', (req: Request, res: Response) =>
   const conflict = globalStore.conflicts.find((c) => c.id === req.params.id);
   if (!conflict) return res.status(404).json({ error: 'Conflict alert not found' });
 
-  // Resolve conflict by holding train and switching signals
+  // Resolve conflict by holding trains, enforcing ATS, and tripping signals
   conflict.resolved = true;
   conflict.acknowledged = true;
 
-  if (conflict.trainBId) {
-    const t2 = globalStore.trains.find((t) => t.id === conflict.trainBId);
-    if (t2) {
-      t2.currentSpeedKmph = 0;
-      t2.status = 'Delayed';
-      t2.delayMinutes += 5;
+  const affectedTrainIds = [conflict.trainAId, conflict.trainBId].filter(Boolean) as string[];
+  for (const tid of affectedTrainIds) {
+    const tr = globalStore.trains.find((t) => t.id === tid);
+    if (tr) {
+      tr.currentSpeedKmph = 0;
+      const isEmergency = conflict.risk === 'CRITICAL' || conflict.id.startsWith('CONF-BLK') || conflict.id.startsWith('CONF-EMG') || conflict.id.startsWith('CONF-HEADON');
+      tr.status = isEmergency ? 'Emergency' : 'Delayed';
+      tr.currentLocation = isEmergency
+        ? `Emergency Stop (ATS Enforced) on ${conflict.trackId || tr.currentTrackId || 'Track'}`
+        : 'Held at Signal for Interlocking Clearance';
+      if (!isEmergency) tr.delayMinutes += 5;
+    }
+  }
+
+  // Trip all signals on the affected track to RED
+  if (conflict.trackId) {
+    for (const sig of globalStore.signals) {
+      if (sig.trackId === conflict.trackId || (conflict.trackId && sig.id === `S-${conflict.trackId.slice(2)}`)) {
+        sig.aspect = 'RED';
+        sig.autoMode = false;
+        sig.lastUpdated = globalStore.getCurrentSimulatedTime();
+      }
+    }
+  }
+
+  // Auto-divert platform conflicts if alternate platform available
+  if (conflict.platformId && conflict.trainBId) {
+    const freePf = globalStore.platforms.find((p) => p.status === 'Available' && p.id !== conflict.platformId);
+    if (freePf) {
+      globalStore.allocatePlatform(conflict.trainBId, freePf.id);
     }
   }
 

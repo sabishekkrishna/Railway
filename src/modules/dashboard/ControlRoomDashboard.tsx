@@ -29,6 +29,7 @@ export const ControlRoomDashboard: React.FC = () => {
     workOrders,
     executeConflictAction,
     resolveConflict,
+    rerouteTrain,
     setActiveTab,
     playChime,
   } = useRailway();
@@ -129,9 +130,21 @@ export const ControlRoomDashboard: React.FC = () => {
                 onClick={() => executeConflictAction(activeConflicts[0].id)}
                 className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold text-xs transition shadow-md flex items-center gap-1.5"
               >
-                <span>Execute Recommended Action</span>
+                <span>Execute Action (ATS Stop & Trip Signals)</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
+              {activeConflicts[0]?.id.startsWith('CONF-EMG') && activeConflicts[0]?.trainAId && (
+                <button
+                  onClick={() => {
+                    executeConflictAction(activeConflicts[0].id);
+                    rerouteTrain(activeConflicts[0].trainAId!, 'T-11');
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs transition shadow-md flex items-center gap-1.5"
+                  title="Divert train from blocked track to North Goods Bypass T-11"
+                >
+                  <span>Divert to Safe Bypass (T-11)</span>
+                </button>
+              )}
               <button
                 onClick={() => resolveConflict(activeConflicts[0].id)}
                 className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"

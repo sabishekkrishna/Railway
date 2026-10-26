@@ -83,6 +83,7 @@ interface RailwayContextType {
   updateSignalAspect: (signalId: string, aspect: SignalAspect, autoMode?: boolean) => void;
   resolveConflict: (conflictId: string) => void;
   executeConflictAction: (conflictId: string) => void;
+  rerouteTrain: (trainId: string, targetTrackId: string) => void;
   createWorkOrder: (data: Partial<MaintenanceWorkOrder>) => void;
   updateWorkOrderStatus: (id: string, status: MaintenanceWorkOrder['status']) => void;
   createEmergencyIncident: (data: Partial<EmergencyIncident>) => void;
@@ -228,7 +229,8 @@ export const RailwayProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const trackAccessible = !!track && track.status !== 'Blocked' && track.status !== 'Emergency Block';
       if (trackAccessible) {
         score += 15;
-        reasoning.push(`Track ${track?.number || pf.connectedTrackId} interlocking clear`);
+        const trkName = track?.number ? (track.number.startsWith("Track") ? track.number : `Track ${track.number}`) : `Track ${pf.connectedTrackId}`;
+        reasoning.push(`${trkName} interlocking clear`);
       } else {
         score -= 60;
         warnings.push(`Connected track is in ${track?.status} state`);
@@ -336,10 +338,15 @@ export const RailwayProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // --------------------------------------------------------------------------
   // Collision & Conflict Detection
   // --------------------------------------------------------------------------
+  const formatTrackName = (trk?: Track | { number: string; id: string }) => {
+    if (!trk) return 'Track';
+    return trk.number.startsWith('Track') ? trk.number : `Track ${trk.number}`;
+  };
+
   const detectConflicts = useCallback(() => {
     const newAlerts: ConflictAlert[] = [];
 
-    // Track dual occupancy
+    // 1. Track dual occupancy
     const trackMap: Record<string, Train[]> = {};
     for (const t of trains) {
       if (t.currentTrackId && t.status !== 'Completed' && t.status !== 'Cancelled') {
@@ -363,7 +370,7 @@ export const RailwayProvider: React.FC<{ children: React.ReactNode }> = ({ child
           trainBNumber: t2.number,
           trackId,
           estimatedMinutesToConflict: 2.0,
-          description: `Simultaneous track occupancy on ${trk?.number || trackId}. Both Train ${t1.number} and Train ${t2.number} on same section.`,
+          description: `Simultaneous track occupancy on ${formatTrackName(trk || { id: trackId, number: trackId })}. Both Train ${t1.number} and Train ${t2.number} on same section.`,
           recommendedAction: `Hold Train ${t2.number} at outer home signal. Set starter signal S-${trackId.slice(2)} to RED.`,
           resolved: false,
           acknowledged: false,
@@ -371,7 +378,33 @@ export const RailwayProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
 
-    // Platform dual overlap
+    // 2. Head-on opposing movements on same track
+    const upTrains = trains.filter((t) => t.direction === 'UP' && t.currentSpeedKmph > 0 && t.status !== 'Completed' && t.status !== 'Cancelled');
+    const downTrains = trains.filter((t) => t.direction === 'DOWN' && t.currentSpeedKmph > 0 && t.status !== 'Completed' && t.status !== 'Cancelled');
+    for (const up of upTrains) {
+      for (const down of downTrains) {
+        if (up.currentTrackId && up.currentTrackId === down.currentTrackId) {
+          const trk = tracks.find((tr) => tr.id === up.currentTrackId);
+          newAlerts.push({
+            id: `CONF-HEADON-${up.currentTrackId}`,
+            timestamp: simulatedTime,
+            risk: 'CRITICAL',
+            trainAId: up.id,
+            trainANumber: up.number,
+            trainBId: down.id,
+            trainBNumber: down.number,
+            trackId: up.currentTrackId,
+            estimatedMinutesToConflict: 1.5,
+            description: `HEAD-ON COLLISION HAZARD: Opposing movements detected between Train ${up.number} (UP) and Train ${down.number} (DOWN) on ${formatTrackName(trk || { id: up.currentTrackId, number: up.currentTrackId })}!`,
+            recommendedAction: 'Trip upstream signals to Danger (RED). Apply emergency brakes on both rakes.',
+            resolved: false,
+            acknowledged: false,
+          });
+        }
+      }
+    }
+
+    // 3. Platform dual overlap
     for (const pf of platforms) {
       if (pf.currentTrainId) {
         const occ = trains.find((t) => t.id === pf.currentTrainId);
@@ -398,7 +431,7 @@ export const RailwayProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
 
-    // Train on Emergency Block track
+    // 4. Train on Emergency Block track
     for (const t of trains) {
       if (t.currentTrackId) {
         const trk = tracks.find((tr) => tr.id === t.currentTrackId);
@@ -410,9 +443,9 @@ export const RailwayProvider: React.FC<{ children: React.ReactNode }> = ({ child
             trainAId: t.id,
             trainANumber: t.number,
             trackId: trk.id,
-            estimatedMinutesToConflict: 0.5,
-            description: `Train ${t.number} entered Track ${trk.number} which is under ${trk.status}!`,
-            recommendedAction: `Trip OHE traction circuit breaker. Enforce automatic train stop (ATS).`,
+            estimatedMinutesToConflict: t.currentSpeedKmph > 0 ? 0.5 : 0,
+            description: `Train ${t.number} entered ${formatTrackName(trk)} which is under ${trk.status}!`,
+            recommendedAction: 'Trip OHE traction circuit breaker. Enforce automatic train stop (ATS).',
             resolved: false,
             acknowledged: false,
           });
@@ -420,11 +453,21 @@ export const RailwayProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
 
-    setConflicts(newAlerts);
+    setConflicts((prev) => {
+      // Preserve resolved state so alerts do not immediately re-fire every second
+      const pastResolved = prev.filter((p) => p.resolved && !newAlerts.some((na) => na.id === p.id));
+      const merged = newAlerts.map((alert) => {
+        const existing = prev.find((p) => p.id === alert.id);
+        if (existing && existing.resolved) {
+          return { ...alert, resolved: true, acknowledged: true };
+        }
+        return alert;
+      });
+      return [...merged, ...pastResolved.slice(0, 25)];
+    });
   }, [trains, tracks, platforms, simulatedTime]);
 
-  // --------------------------------------------------------------------------
-  // Update Signals based on Interlocking logic
+    // Update Signals based on Interlocking logic
   // --------------------------------------------------------------------------
   const updateSignalsInterlocking = useCallback(() => {
     setSignals((prev) =>
@@ -459,7 +502,7 @@ export const RailwayProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       setTrains((prev) =>
         prev.map((train) => {
-          if (train.status === 'Approaching' || train.status === 'In Transit') {
+          if ((train.status === 'Approaching' || train.status === 'In Transit') && train.currentSpeedKmph > 0) {
             const nextPercent = Math.min(100, train.positionPercent + 0.6 * simSpeed);
             if (nextPercent >= 50 && train.status === 'Approaching' && !train.currentPlatformId) {
               const prefPfId = train.currentPlatformId || 'PF-03';
@@ -473,7 +516,7 @@ export const RailwayProvider: React.FC<{ children: React.ReactNode }> = ({ child
               };
             }
             return { ...train, positionPercent: nextPercent };
-          } else if (train.status === 'Departing') {
+          } else if (train.status === 'Departing' && train.currentSpeedKmph > 0) {
             const nextPercent = Math.min(100, train.positionPercent + 1.0 * simSpeed);
             if (nextPercent >= 100) {
               return { ...train, positionPercent: 100, status: 'Completed', currentSpeedKmph: 0 };
@@ -570,24 +613,123 @@ export const RailwayProvider: React.FC<{ children: React.ReactNode }> = ({ child
     addNotification('Conflict Acknowledged', `Conflict ${conflictId} marked resolved`, 'INFO', 'Collision Prevention');
   }, [addNotification]);
 
+  const rerouteTrain = useCallback((trainId: string, targetTrackId: string) => {
+    const targetTrack = tracks.find((tr) => tr.id === targetTrackId);
+    if (!targetTrack) return;
+
+    const trackName = targetTrack.number.startsWith('Track') ? targetTrack.number : `Track ${targetTrack.number}`;
+
+    setTrains((prev) =>
+      prev.map((t) => {
+        if (t.id === trainId) {
+          const oldTrackId = t.currentTrackId;
+          const updated: Train = {
+            ...t,
+            currentTrackId: targetTrackId,
+            currentLocation: `Diverted via ${trackName}`,
+            status: 'In Transit',
+            currentSpeedKmph: Math.min(30, targetTrack.speedRestrictionKmph),
+          };
+          recordAudit('Train Reroute / Diversion', 'Train Movement', `Track ${oldTrackId || 'None'}`, trackName);
+          return updated;
+        }
+        return t;
+      })
+    );
+
+    // Update track occupancy
+    setTracks((prev) =>
+      prev.map((tr) => {
+        if (tr.id === targetTrackId) {
+          return { ...tr, status: 'Occupied', currentTrainId: trainId };
+        }
+        if (tr.currentTrainId === trainId && tr.id !== targetTrackId) {
+          return { ...tr, currentTrainId: undefined, status: tr.status === 'Emergency Block' ? 'Emergency Block' : 'Free' };
+        }
+        return tr;
+      })
+    );
+
+    // Mark any associated emergency block conflicts as resolved
+    setConflicts((prev) =>
+      prev.map((c) => (c.trainAId === trainId || c.trainBId === trainId ? { ...c, resolved: true, acknowledged: true } : c))
+    );
+
+    addNotification('Train Diverted to Safe Line', `Train ${trainId} successfully rerouted to ${trackName}`, 'INFO', 'Collision Prevention');
+  }, [tracks, recordAudit, addNotification]);
+
   const executeConflictAction = useCallback((conflictId: string) => {
     const conf = conflicts.find((c) => c.id === conflictId);
     if (!conf) return;
 
-    if (conf.trainBId) {
-      changeTrainStatus(conf.trainBId, 'Delayed', 0);
-    }
+    // 1. Identify all affected trains: trainAId and/or trainBId
+    const affectedTrainIds = [conf.trainAId, conf.trainBId].filter(Boolean) as string[];
+
+    // Halt all affected trains immediately (Automatic Train Stop - ATS)
+    setTrains((prev) =>
+      prev.map((t) => {
+        if (affectedTrainIds.includes(t.id)) {
+          const isEmergency = conf.risk === 'CRITICAL' || conf.id.startsWith('CONF-EMG') || conf.id.startsWith('CONF-HEADON');
+          return {
+            ...t,
+            status: isEmergency ? 'Emergency' : 'Delayed',
+            currentSpeedKmph: 0,
+            currentLocation: isEmergency
+              ? `Emergency Stop (ATS Enforced) on ${conf.trackId || t.currentTrackId || 'Track'}`
+              : 'Held at Signal for Interlocking Clearance',
+          };
+        }
+        return t;
+      })
+    );
+
+    // 2. Trip all signals on the affected track to RED (Danger)
     if (conf.trackId) {
-      const sig = signals.find((s) => s.trackId === conf.trackId);
-      if (sig) updateSignalAspect(sig.id, 'RED', false);
+      setSignals((prev) =>
+        prev.map((s) => {
+          if (s.trackId === conf.trackId || (conf.trackId && s.id === `S-${conf.trackId.slice(2)}`)) {
+            return { ...s, aspect: 'RED', autoMode: false, lastUpdated: simulatedTime };
+          }
+          return s;
+        })
+      );
+      recordAudit('Emergency Signal Trip', 'Collision Prevention', 'Previous Aspect', `RED on Track ${conf.trackId}`);
     }
 
-    resolveConflict(conflictId);
-    recordAudit('Execute Conflict Action', 'Collision Prevention', 'Active Alert', 'Action Executed');
-    addNotification('Anti-Collision Action Executed', `Safeguards applied for conflict ${conf.id}`, 'HIGH', 'Collision Prevention');
-  }, [conflicts, signals, changeTrainStatus, updateSignalAspect, resolveConflict, recordAudit, addNotification]);
+    // 3. Platform conflict diversion
+    if (conf.platformId && conf.trainBId) {
+      const freePf = platforms.find((p) => p.status === 'Available' && p.id !== conf.platformId);
+      if (freePf) {
+        allocatePlatform(conf.trainBId, freePf.id);
+        addNotification(
+          'Platform Conflict Diverted',
+          `Train ${conf.trainBNumber || conf.trainBId} diverted to Platform ${freePf.number}`,
+          'INFO',
+          'Collision Prevention'
+        );
+      }
+    }
 
-  const createWorkOrder = useCallback((data: Partial<MaintenanceWorkOrder>) => {
+    // 4. Mark conflict as resolved and acknowledged
+    setConflicts((prev) =>
+      prev.map((c) => (c.id === conflictId ? { ...c, resolved: true, acknowledged: true } : c))
+    );
+
+    recordAudit(
+      'Execute Anti-Collision Action',
+      'Collision Prevention',
+      'Active Conflict Alert',
+      `Safeguards Enforced for ${conf.id} (ATS Enforced, Speed = 0 km/h, Signals Tripped to RED)`
+    );
+    addNotification(
+      'Anti-Collision Safeguards Enforced',
+      `Action executed for ${conf.id}: ATS Enforced, Train Speed = 0 km/h, Signals Tripped to RED.`,
+      'HIGH',
+      'Collision Prevention'
+    );
+  }, [conflicts, simulatedTime, platforms, allocatePlatform, recordAudit, addNotification]);
+
+    const createWorkOrder = useCallback((data: Partial<MaintenanceWorkOrder>) => {
     const newWo: MaintenanceWorkOrder = {
       id: `WO-${Date.now()}`,
       trainId: data.trainId || 'TR-12002',
@@ -856,6 +998,7 @@ export const RailwayProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setActiveTab,
         allocatePlatform,
         autoAllocatePlatform,
+        rerouteTrain,
         changeTrainStatus,
         updateTrainSpeed,
         updateTrackStatus,

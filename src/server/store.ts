@@ -272,7 +272,7 @@ export class RailwayStore {
 
         if (occupyingTrain && nextTrain) {
           alerts.push({
-            id: `CONF-PF-${pf.id}-${Date.now()}`,
+            id: `CONF-PF-${pf.id}`,
             timestamp: nowTime,
             risk: 'HIGH',
             trainAId: occupyingTrain.id,
@@ -296,14 +296,14 @@ export class RailwayStore {
         const track = this.tracks.find((t) => t.id === train.currentTrackId);
         if (track && (track.status === 'Blocked' || track.status === 'Emergency Block')) {
           alerts.push({
-            id: `CONF-BLK-${track.id}-${Date.now()}`,
+            id: `CONF-BLK-${track.id}`,
             timestamp: nowTime,
             risk: 'CRITICAL',
             trainAId: train.id,
             trainANumber: train.number,
             trackId: track.id,
             estimatedMinutesToConflict: 0.5,
-            description: `Train ${train.number} on ${track.number} which has an ACTIVE EMERGENCY BLOCK!`,
+            description: `Train ${train.number} on ${track.number.startsWith("Track") ? track.number : `Track ${track.number}`} which has an ACTIVE EMERGENCY BLOCK!`,
             recommendedAction: `Apply emergency brake (SPAD trip). Halt traction feed immediately.`,
             resolved: false,
             acknowledged: false,
@@ -319,7 +319,7 @@ export class RailwayStore {
       for (const down of downTrains) {
         if (up.currentTrackId && up.currentTrackId === down.currentTrackId) {
           alerts.push({
-            id: `CONF-HEADON-${up.currentTrackId}-${Date.now()}`,
+            id: `CONF-HEADON-${up.currentTrackId}`,
             timestamp: nowTime,
             risk: 'CRITICAL',
             trainAId: up.id,
@@ -337,8 +337,39 @@ export class RailwayStore {
       }
     }
 
-    this.conflicts = alerts;
+    const existingMap = new Map(this.conflicts.map((c) => [c.id, c]));
+    this.conflicts = alerts.map((alert) => {
+      const existing = existingMap.get(alert.id);
+      if (existing && existing.resolved) {
+        return { ...alert, resolved: true, acknowledged: true };
+      }
+      return alert;
+    });
     return alerts;
+  }
+
+  allocatePlatform(trainId: string, platformId: string): boolean {
+    const train = this.trains.find((t) => t.id === trainId);
+    const platform = this.platforms.find((p) => p.id === platformId);
+    if (!train || !platform) return false;
+
+    if (train.currentPlatformId) {
+      const prevPf = this.platforms.find((p) => p.id === train.currentPlatformId);
+      if (prevPf && prevPf.id !== platform.id) {
+        prevPf.status = 'Available';
+        prevPf.currentTrainId = undefined;
+      }
+    }
+
+    train.currentPlatformId = platform.id;
+    platform.status = 'Occupied';
+    platform.currentTrainId = train.id;
+
+    const sched = this.schedules.find((s) => s.trainId === train.id);
+    if (sched) {
+      sched.allocatedPlatformId = platform.id;
+    }
+    return true;
   }
 
   // --------------------------------------------------------------------------
@@ -380,7 +411,7 @@ export class RailwayStore {
 
     // Update moving trains
     for (const train of this.trains) {
-      if (train.status === 'Approaching' || train.status === 'In Transit') {
+      if ((train.status === 'Approaching' || train.status === 'In Transit') && train.currentSpeedKmph > 0) {
         train.positionPercent = Math.min(100, train.positionPercent + 0.8 * this.simulationSpeed);
 
         // Transition from approaching to platform if reached threshold
@@ -406,7 +437,7 @@ export class RailwayStore {
             }
           }
         }
-      } else if (train.status === 'Departing') {
+      } else if (train.status === 'Departing' && train.currentSpeedKmph > 0) {
         train.positionPercent = Math.min(100, train.positionPercent + 1.2 * this.simulationSpeed);
         if (train.positionPercent >= 100) {
           train.status = 'Completed';
@@ -483,7 +514,7 @@ export class RailwayStore {
         track.status = 'Emergency Block';
         incident.timeline.push({
           time: this.getCurrentSimulatedTime(),
-          action: `Track ${track.number} placed under EMERGENCY BLOCK (Signal held RED).`,
+          action: `${track.number.startsWith("Track") ? track.number : `Track ${track.number}`} placed under EMERGENCY BLOCK (Signal held RED).`,
           actor: 'Interlocking System',
         });
       }

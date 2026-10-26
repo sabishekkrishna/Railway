@@ -15,7 +15,7 @@ import { useRailway } from '../../context/RailwayContext';
 import { ConflictRisk } from '../../types/railway';
 
 export const CollisionPrevention: React.FC = () => {
-  const { conflicts, trains, tracks, executeConflictAction, resolveConflict, simulatedTime } = useRailway();
+  const { conflicts, trains, tracks, executeConflictAction, resolveConflict, rerouteTrain, simulatedTime } = useRailway();
 
   const getRiskBadge = (risk: ConflictRisk) => {
     switch (risk) {
@@ -151,6 +151,19 @@ export const CollisionPrevention: React.FC = () => {
                       <span>Execute Action (Hold & Trip Signals)</span>
                       <ArrowUpRight className="w-3.5 h-3.5" />
                     </button>
+                    {item.id.startsWith('CONF-EMG') && item.trainAId && (
+                      <button
+                        onClick={() => {
+                          executeConflictAction(item.id);
+                          rerouteTrain(item.trainAId!, 'T-11');
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs flex items-center gap-1.5 transition shadow"
+                        title="Divert train from blocked track to North Goods Bypass T-11"
+                      >
+                        <GitBranch className="w-3.5 h-3.5" />
+                        <span>Divert to Safe Bypass (T-11)</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => resolveConflict(item.id)}
                       className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"

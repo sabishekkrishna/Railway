@@ -22,6 +22,7 @@ export const StationInterlockingView: React.FC = () => {
     tracks,
     conflicts,
     executeConflictAction,
+    rerouteTrain,
     resolveConflict,
     changeTrainStatus,
     updateSignalAspect,
@@ -42,17 +43,35 @@ export const StationInterlockingView: React.FC = () => {
               <span className="font-bold text-white uppercase tracking-wider">
                 INTERLOCKING CONFLICT DETECTED:
               </span>{' '}
-              <span className="text-red-200">{activeConflicts[0].description}</span>
+              <span className="text-red-200 font-medium">{activeConflicts[0]?.description}</span>
+              {activeConflicts[0]?.recommendedAction && (
+                <span className="text-amber-300 ml-2 font-mono text-[11px] hidden lg:inline">
+                  [Action: {activeConflicts[0].recommendedAction}]
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => executeConflictAction(activeConflicts[0].id)}
               className="px-3 py-1 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-xs shadow flex items-center gap-1 transition"
+              title={activeConflicts[0]?.recommendedAction || 'Execute immediate safety action'}
             >
-              <span>Hold Train & Trip Signals</span>
+              <span>Hold Train & Trip Signals (Enforce ATS)</span>
               <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
+            {activeConflicts[0]?.id.startsWith('CONF-EMG') && activeConflicts[0]?.trainAId && (
+              <button
+                onClick={() => {
+                  executeConflictAction(activeConflicts[0].id);
+                  rerouteTrain(activeConflicts[0].trainAId!, 'T-11');
+                }}
+                className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg text-xs shadow flex items-center gap-1 transition"
+                title="Divert train from blocked track to North Goods Bypass T-11"
+              >
+                <span>Divert to Bypass (T-11)</span>
+              </button>
+            )}
             <button
               onClick={() => resolveConflict(activeConflicts[0].id)}
               className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs transition"
