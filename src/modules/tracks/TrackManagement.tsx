@@ -15,8 +15,10 @@ import { Track, TrackStatus } from '../../types/railway';
 
 export const TrackManagement: React.FC = () => {
   const { tracks, updateTrackStatus, simulatedTime } = useRailway();
-  const [selectedTrack, setSelectedTrack] = useState<Track>(tracks[0]);
-  const [newSpeedLimit, setNewSpeedLimit] = useState<number>(selectedTrack.speedRestrictionKmph);
+  const [selectedTrack, setSelectedTrack] = useState<Track | null>(tracks[0] || null);
+
+  const currentTrack = tracks.find((t) => t.id === selectedTrack?.id) || tracks[0] || selectedTrack;
+  const [newSpeedLimit, setNewSpeedLimit] = useState<number>(currentTrack?.speedRestrictionKmph || 130);
 
   const getTrackBadge = (status: TrackStatus) => {
     switch (status) {
@@ -38,7 +40,9 @@ export const TrackManagement: React.FC = () => {
   };
 
   const handleApplySpeedLimit = () => {
-    updateTrackStatus(selectedTrack.id, selectedTrack.status, newSpeedLimit);
+    if (currentTrack) {
+      updateTrackStatus(currentTrack.id, currentTrack.status, newSpeedLimit);
+    }
   };
 
   return (
@@ -87,7 +91,7 @@ export const TrackManagement: React.FC = () => {
               <tbody className="divide-y divide-slate-800/80">
                 {tracks.map((track) => {
                   const badge = getTrackBadge(track.status);
-                  const isSelected = selectedTrack.id === track.id;
+                  const isSelected = currentTrack?.id === track.id;
 
                   return (
                     <tr
@@ -131,80 +135,86 @@ export const TrackManagement: React.FC = () => {
         </div>
 
         {/* Selected Track Controller */}
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-4 shadow-lg">
-          <div className="border-b border-slate-800 pb-3 flex items-start justify-between">
-            <div>
-              <div className="text-xl font-bold font-mono text-amber-300">{selectedTrack.id}</div>
-              <div className="text-sm font-semibold text-slate-100">{selectedTrack.number}</div>
-              <div className="text-xs text-slate-400">Length: {selectedTrack.lengthMeters}m · 25kV Electrified</div>
+        {currentTrack ? (
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-4 shadow-lg">
+            <div className="border-b border-slate-800 pb-3 flex items-start justify-between">
+              <div>
+                <div className="text-xl font-bold font-mono text-amber-300">{currentTrack.id}</div>
+                <div className="text-sm font-semibold text-slate-100">{currentTrack.number}</div>
+                <div className="text-xs text-slate-400">Length: {currentTrack.lengthMeters}m · 25kV Electrified</div>
+              </div>
+              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${getTrackBadge(currentTrack.status).class}`}>
+                {currentTrack.status}
+              </span>
             </div>
-            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${getTrackBadge(selectedTrack.status).class}`}>
-              {selectedTrack.status}
-            </span>
+
+            {/* Quick Actions */}
+            <div className="space-y-2">
+              <div className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                Track Circuit State Override
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <button
+                  onClick={() => updateTrackStatus(currentTrack.id, 'Free')}
+                  className="p-2 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 font-semibold"
+                >
+                  Mark Free (Clear)
+                </button>
+                <button
+                  onClick={() => updateTrackStatus(currentTrack.id, 'Reserved')}
+                  className="p-2 rounded-lg bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-700/60 font-semibold"
+                >
+                  Mark Reserved
+                </button>
+                <button
+                  onClick={() => updateTrackStatus(currentTrack.id, 'Under Maintenance')}
+                  className="p-2 rounded-lg bg-orange-950/80 hover:bg-orange-900 text-orange-300 border border-orange-700/60 font-semibold"
+                >
+                  Engineering Work
+                </button>
+                <button
+                  onClick={() => updateTrackStatus(currentTrack.id, 'Emergency Block')}
+                  className="p-2 rounded-lg bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-700/60 font-semibold"
+                >
+                  Emergency Block
+                </button>
+              </div>
+            </div>
+
+            {/* Temporary Speed Restriction (TSR) Editor */}
+            <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+              <div className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                Caution Order Speed Restriction (TSR)
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Impose speed restriction on train pilots entering this track section:
+              </p>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="10"
+                  max="130"
+                  value={newSpeedLimit}
+                  onChange={(e) => setNewSpeedLimit(Number(e.target.value))}
+                  className="w-24 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-xs font-mono text-slate-100"
+                />
+                <span className="text-xs text-slate-300">km/h</span>
+
+                <button
+                  onClick={handleApplySpeedLimit}
+                  className="ml-auto px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs"
+                >
+                  Issue TSR
+                </button>
+              </div>
+            </div>
           </div>
-
-          {/* Quick Actions */}
-          <div className="space-y-2">
-            <div className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-              Track Circuit State Override
-            </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                onClick={() => updateTrackStatus(selectedTrack.id, 'Free')}
-                className="p-2 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 font-semibold"
-              >
-                Mark Free (Clear)
-              </button>
-              <button
-                onClick={() => updateTrackStatus(selectedTrack.id, 'Reserved')}
-                className="p-2 rounded-lg bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-700/60 font-semibold"
-              >
-                Mark Reserved
-              </button>
-              <button
-                onClick={() => updateTrackStatus(selectedTrack.id, 'Under Maintenance')}
-                className="p-2 rounded-lg bg-orange-950/80 hover:bg-orange-900 text-orange-300 border border-orange-700/60 font-semibold"
-              >
-                Engineering Work
-              </button>
-              <button
-                onClick={() => updateTrackStatus(selectedTrack.id, 'Emergency Block')}
-                className="p-2 rounded-lg bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-700/60 font-semibold"
-              >
-                Emergency Block
-              </button>
-            </div>
+        ) : (
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 flex items-center justify-center text-slate-400 text-xs">
+            No track selected.
           </div>
-
-          {/* Temporary Speed Restriction (TSR) Editor */}
-          <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-            <div className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-              Caution Order Speed Restriction (TSR)
-            </div>
-            <p className="text-[11px] text-slate-400">
-              Impose speed restriction on train pilots entering this track section:
-            </p>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min="10"
-                max="130"
-                value={newSpeedLimit}
-                onChange={(e) => setNewSpeedLimit(Number(e.target.value))}
-                className="w-24 bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-xs font-mono text-slate-100"
-              />
-              <span className="text-xs text-slate-300">km/h</span>
-
-              <button
-                onClick={handleApplySpeedLimit}
-                className="ml-auto px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs"
-              >
-                Issue TSR
-              </button>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

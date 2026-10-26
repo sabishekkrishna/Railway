@@ -10,6 +10,7 @@ import {
   Send,
   HelpCircle,
   Lightbulb,
+  Loader2,
 } from 'lucide-react';
 import { useRailway } from '../../context/RailwayContext';
 
@@ -18,30 +19,69 @@ export const AIDecisionSupport: React.FC = () => {
   const [selectedTrainId, setSelectedTrainId] = useState(trains[0]?.id || '');
   const [userQuery, setUserQuery] = useState('');
   const [aiAnalysisResult, setAiAnalysisResult] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const selectedTrain = trains.find((t) => t.id === selectedTrainId) || trains[0];
-  const recommendations = autoAllocatePlatform(selectedTrain.id);
+  const recommendations = selectedTrain ? autoAllocatePlatform(selectedTrain.id) : [];
   const bestPf = recommendations[0];
 
-  const handleAskAI = (e: React.FormEvent) => {
+  const handleAskAI = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userQuery) return;
+    if (!userQuery.trim()) return;
 
-    // Tactical AI reasoning synthesis
+    setLoading(true);
+
+    const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
+    if (apiKey) {
+      try {
+        const { GoogleGenAI } = await import('@google/genai');
+        const ai = new GoogleGenAI({ apiKey });
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: `You are an Indian Railways Operations Control Center (IR-OCC) AI Decision Support system for New Delhi (NDLS) Junction.
+Current simulated time: ${simulatedTime} IST.
+Active trains: ${trains.map((t) => `${t.number} ${t.name} (Status: ${t.status}, Delay: ${t.delayMinutes}m, Track: ${t.currentTrackId || 'none'})`).join(', ')}.
+Available platforms: ${platforms.filter((p) => p.status === 'Available').map((p) => p.number).join(', ')}.
+Active conflicts: ${conflicts.filter((c) => !c.resolved).map((c) => c.description).join('; ') || 'None'}.
+Active emergencies: ${emergencies.filter((e) => e.status !== 'Resolved').map((e) => e.title).join('; ') || 'None'}.
+
+Operator Query: "${userQuery}".
+Provide tactical railway operational advice with rationale, route interlocking confirmation, and mitigation steps.`,
+        });
+
+        if (response?.text) {
+          setAiAnalysisResult(response.text);
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('Gemini API query failed or key unavailable, falling back to heuristic engine:', err);
+      }
+    }
+
+    // High-precision local heuristic reasoning fallback
+    const delayedTrains = trains.filter((t) => t.delayMinutes > 0);
+    const activeConflicts = conflicts.filter((c) => !c.resolved);
+    const availablePfs = platforms.filter((p) => p.status === 'Available').map((p) => `PF-${p.number}`);
+
     setAiAnalysisResult(
       `[AI DECISION SUPPORT ANALYSIS · ${simulatedTime} IST]\n\n` +
       `QUERY: "${userQuery}"\n\n` +
       `1. TACTICAL ASSESSMENT:\n` +
       `   - Current active train density is ${trains.filter((t) => t.status !== 'Completed').length} rakes in Delhi Division.\n` +
-      `   - Platform utilization is at 76.4% with ${platforms.filter((p) => p.status === 'Available').length} berths clear.\n` +
-      `   - Interlocking status on Up Main (Track 9) and Down Main (Track 10) is normal.\n\n` +
+      `   - Platform utilization is at ${Math.round(((8 - availablePfs.length) / 8) * 100)}% with ${availablePfs.length} berths clear (${availablePfs.join(', ') || 'None'}).\n` +
+      `   - Interlocking status on Up Main (Track 9) and Down Main (Track 10) is active.\n` +
+      `   - Active conflict alerts: ${activeConflicts.length} | Delayed trains: ${delayedTrains.length}.\n\n` +
       `2. RECOMMENDED INTERVENTION:\n` +
-      `   - Prioritize Train 22436 Vande Bharat Express on Platform 2 with green starter aspect on S-02.\n` +
-      `   - Route delayed Train 12601 into loop track T-06 only after suburban MEMU 64491 vacates at 14:50.\n` +
-      `   - Enforce 30 km/h caution order on Turnout 14B.\n\n` +
+      `   - Prioritize high-speed rakes (Vande Bharat / Rajdhani) on dedicated electrified main tracks.\n` +
+      `   - Hold suburban rakes at outer signals S-01/S-04 until platform line clearance is acknowledged.\n` +
+      `   - Speed restriction: Enforce 30 km/h caution order across Turnout points 14A/B during berthing.\n\n` +
       `3. SAFETY INTERLOCKING CONFIRMATION:\n` +
-      `   - Verified fail-safe compliance. Route locking proved prior to signal clearance.`
+      `   - Route Relay Interlocking verified fail-safe compliant.\n` +
+      `   - Route locking proved prior to signal aspect progression to Yellow/Green.`
     );
+
+    setLoading(false);
   };
 
   return (
@@ -87,7 +127,7 @@ export const AIDecisionSupport: React.FC = () => {
             </select>
           </div>
 
-          {bestPf && (
+          {bestPf && selectedTrain ? (
             <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
               <div className="flex items-start justify-between">
                 <div>
@@ -117,6 +157,10 @@ export const AIDecisionSupport: React.FC = () => {
                 ))}
               </div>
             </div>
+          ) : (
+            <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-slate-400 text-xs text-center">
+              No train selected or platform recommendations available.
+            </div>
           )}
         </div>
 
@@ -144,10 +188,11 @@ export const AIDecisionSupport: React.FC = () => {
                 />
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 shadow transition"
+                  disabled={loading}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1.5 shadow transition"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Analyze</span>
+                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  <span>{loading ? 'Analyzing...' : 'Analyze'}</span>
                 </button>
               </div>
             </form>

@@ -169,7 +169,8 @@ apiRouter.get('/platforms', (req: Request, res: Response) => {
 });
 
 apiRouter.get('/platforms/recommend/:trainId', (req: Request, res: Response) => {
-  const recommendations = globalStore.recommendPlatform(req.params.trainId);
+  const trainId = Array.isArray(req.params.trainId) ? req.params.trainId[0] : req.params.trainId;
+  const recommendations = globalStore.recommendPlatform(trainId);
   if (recommendations.length === 0) {
     return res.status(404).json({ error: 'Train not found or no platforms eligible' });
   }

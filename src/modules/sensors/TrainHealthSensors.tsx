@@ -18,8 +18,9 @@ export const TrainHealthSensors: React.FC = () => {
   const [selectedTrainId, setSelectedTrainId] = useState<string>(trains[0]?.id || '');
 
   const selectedTrain = trains.find((t) => t.id === selectedTrainId) || trains[0];
-  const telemetry = telemetries[selectedTrain.id] || {
-    trainId: selectedTrain.id,
+  const trainId = selectedTrain?.id || "TR-12002";
+  const telemetry = (selectedTrain ? telemetries[selectedTrain.id] : undefined) || {
+    trainId: trainId,
     engineTemperatureC: 68,
     brakePipePressureBar: 5.0,
     feedPipePressureBar: 6.0,

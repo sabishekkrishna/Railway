@@ -1,12 +1,11 @@
+import 'dotenv/config';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import http from 'http';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { apiRouter } from './src/server/routes.ts';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const rootDir = import.meta.dirname;
 
 async function startServer() {
   const app = express();
@@ -19,9 +18,9 @@ async function startServer() {
 
   // In production serve dist, in dev mount Vite middlewares
   if (process.env.NODE_ENV === 'production') {
-    const distPath = path.resolve(__dirname, 'dist');
+    const distPath = path.resolve(rootDir, 'dist');
     app.use(express.static(distPath));
-    app.get('*', (_req, res) => {
+    app.use((_req, res) => {
       res.sendFile(path.resolve(distPath, 'index.html'));
     });
   } else {

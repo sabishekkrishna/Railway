@@ -15,7 +15,9 @@ import { Train } from '../../types/railway';
 export const PassengerDashboard: React.FC = () => {
   const { station, simulatedTime, trains, platforms, playChime } = useRailway();
   const [languageMode, setLanguageMode] = useState<'bilingual' | 'english' | 'hindi'>('bilingual');
-  const [selectedTrainForCoach, setSelectedTrainForCoach] = useState<Train>(trains[0]);
+  const [selectedTrainForCoach, setSelectedTrainForCoach] = useState<Train | null>(trains[0] || null);
+
+  const currentTrain = trains.find((t) => t.id === selectedTrainForCoach?.id) || trains[0] || selectedTrainForCoach;
 
   const getPIDSStatusBadge = (t: Train) => {
     if (t.status === 'Cancelled') {
@@ -132,7 +134,7 @@ export const PassengerDashboard: React.FC = () => {
               {trains.map((train) => {
                 const statusBadge = getPIDSStatusBadge(train);
                 const pf = platforms.find((p) => p.id === train.currentPlatformId);
-                const isSelected = selectedTrainForCoach.id === train.id;
+                const isSelected = currentTrain?.id === train.id;
 
                 return (
                   <tr
@@ -182,49 +184,51 @@ export const PassengerDashboard: React.FC = () => {
       </div>
 
       {/* Selected Train Coach Composition Position Guide (PIDS Feature) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-          <div>
-            <h3 className="font-bold text-sm text-slate-100 flex items-center gap-2">
-              <span>डिब्बा स्थिति दर्शक / COACH POSITION GUIDE</span>
-              <span className="text-amber-400 font-mono">
-                — {selectedTrainForCoach.number} {selectedTrainForCoach.name}
-              </span>
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Platform berthing sequence from Engine to Rear Power Car (Engine at front)
-            </p>
+      {currentTrain && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <div>
+              <h3 className="font-bold text-sm text-slate-100 flex items-center gap-2">
+                <span>डिब्बा स्थिति दर्शक / COACH POSITION GUIDE</span>
+                <span className="text-amber-400 font-mono">
+                  — {currentTrain.number} {currentTrain.name}
+                </span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Platform berthing sequence from Engine to Rear Power Car (Engine at front)
+              </p>
+            </div>
+            <span className="text-xs font-mono px-2 py-1 rounded bg-slate-950 text-slate-300 border border-slate-800">
+              {currentTrain.composition?.length || 0} Coaches · {currentTrain.lengthMeters}m Rake
+            </span>
           </div>
-          <span className="text-xs font-mono px-2 py-1 rounded bg-slate-950 text-slate-300 border border-slate-800">
-            {selectedTrainForCoach.composition.length} Coaches · {selectedTrainForCoach.lengthMeters}m Rake
-          </span>
-        </div>
 
-        {/* Coach Sequence Track Visualizer */}
-        <div className="overflow-x-auto py-2">
-          <div className="flex items-center gap-1.5 min-w-[700px]">
-            {selectedTrainForCoach.composition.map((c, index) => (
-              <div
-                key={c.id || index}
-                className={`p-2 rounded-lg border text-center shrink-0 min-w-[65px] font-mono ${
-                  c.code === 'LOCO' || c.code === 'DTC'
-                    ? 'bg-red-950/80 border-red-700 text-red-300'
-                    : c.code.startsWith('H') || c.code.startsWith('A')
-                    ? 'bg-amber-950/80 border-amber-700 text-amber-300'
-                    : c.code.startsWith('B')
-                    ? 'bg-blue-950/80 border-blue-700 text-blue-300'
-                    : c.code.startsWith('S')
-                    ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
-                    : 'bg-slate-800 border-slate-700 text-slate-300'
-                }`}
-              >
-                <div className="text-xs font-bold">{c.code}</div>
-                <div className="text-[9px] text-slate-400 truncate max-w-[60px]">{c.type}</div>
-              </div>
-            ))}
+          {/* Coach Sequence Track Visualizer */}
+          <div className="overflow-x-auto py-2">
+            <div className="flex items-center gap-1.5 min-w-[700px]">
+              {(currentTrain.composition || []).map((c, index) => (
+                <div
+                  key={c.id || index}
+                  className={`p-2 rounded-lg border text-center shrink-0 min-w-[65px] font-mono ${
+                    c.code === 'LOCO' || c.code === 'DTC'
+                      ? 'bg-red-950/80 border-red-700 text-red-300'
+                      : c.code.startsWith('H') || c.code.startsWith('A')
+                      ? 'bg-amber-950/80 border-amber-700 text-amber-300'
+                      : c.code.startsWith('B')
+                      ? 'bg-blue-950/80 border-blue-700 text-blue-300'
+                      : c.code.startsWith('S')
+                      ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300'
+                      : 'bg-slate-800 border-slate-700 text-slate-300'
+                  }`}
+                >
+                  <div className="text-xs font-bold">{c.code}</div>
+                  <div className="text-[9px] text-slate-400 truncate max-w-[60px]">{c.type}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

@@ -95,7 +95,7 @@ export const PlatformAllocation: React.FC = () => {
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-amber-400" />
               <h3 className="font-bold text-sm text-amber-300">
-                Algorithmic Evaluation for Train {selectedTrain.number} ({selectedTrain.lengthMeters}m, {selectedTrain.type})
+                Algorithmic Evaluation for Train {selectedTrain?.number || selectedTrainId} ({selectedTrain?.lengthMeters || 0}m, {selectedTrain?.type || ""})
               </h3>
             </div>
             <span className="text-xs font-mono text-slate-400">

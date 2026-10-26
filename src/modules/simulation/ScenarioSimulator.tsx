@@ -65,7 +65,7 @@ export const ScenarioSimulator: React.FC = () => {
       {/* Grid of 8 Presets */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         {emergencyScenarios.map((scenario) => {
-          const isSelected = activePreset.id === scenario.id;
+          const isSelected = activePreset?.id === scenario.id;
           return (
             <div
               key={scenario.id}
